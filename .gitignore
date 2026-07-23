@@ -1,5 +1,5 @@
-# Sensitive credentials — NEVER commit
-api/config.php
+# Sensitive credentials — KEEP config.php template, tapi JANGAN push credentials nyata
+# config.php di-commit dengan placeholder CHANGE_ME — edit manual setelah deploy
 api/setup.php
 Token.txt
 
