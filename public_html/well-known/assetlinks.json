@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "xyz.petanipizza.iot.twa",
+        "sha256_cert_fingerprints": ["94:4E:70:66:8E:78:2D:AD:5E:84:C4:98:99:27:ED:A0:2C:3E:10:3E:CD:1A:91:7A:48:8A:16:AD:45:B4:BB:A6"]
+      }
+    }]
