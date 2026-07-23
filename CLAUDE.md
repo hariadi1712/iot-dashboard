@@ -4,107 +4,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IoT irrigation system for Kebun Jaya — two independent growing systems (GH & OF2), each with:
-- **ESP32 controller** (irrigation, tank level, pressure, recharge)
-- **ESP32 SmartDosing** (nutrient A/B injection)
-- **PHP dashboard** + **React frontend** (Hostinger shared hosting)
+PHP backend + React dashboard for IoT irrigation system. Firmware ESP32 ada di repo terpisah: https://github.com/hariadi1712/iot-firmware
 
-## Repository Structure
+## Repository Structure (flat — langsung upload ke Hostinger subdomain)
 
 ```
-firmware-produksi/
-├── MasterGH/          # GH controller (ESP32). Irrigation + recharge GH.
-│   ├── MasterGH.ino  # Main sketch — state machine, sensors, relay control
-│   ├── KJApi.h        # HTTP transport layer (telemetry, commands, schedules)
-│   └── KJScheduler.h # Local schedule storage (NVS, offline-first)
-├── MasterOF2/         # OF2 controller (ESP32). Irrigation + recharge sumur bor.
-│   ├── MasterOF2.ino  # Differs from GH: motorized valve (18s travel), UDP sync
-│   └── KJApi.h
-└── SmartDosing/      # Nutrient doser (ESP32). Auto-dose from raw water volume.
-    ├── SmartDosing.ino
-    └── KJApi.h
-
-kebunjaya-deploy/
-├── src/App.jsx       # React dashboard — two systems (gh / of2), 4 tabs
-├── public_html/
-│   ├── api/
-│   │   ├── index.php # All API endpoints
-│   │   ├── lib.php   # Shared helpers (db, auth, config)
-│   │   └── config.sample.php
-│   └── assets/app.js # Bundled React (rebuild after editing App.jsx)
-└── schema.sql         # MySQL schema (import once via phpMyAdmin)
+(root)
+├── index.html              # Dashboard entry
+├── admin.html              # Admin panel
+├── sw.js                  # Service worker (PWA)
+├── manifest.webmanifest
+├── .htaccess              # HTTPS redirect + cache
+├── api/
+│   ├── index.php          # All API endpoints
+│   ├── lib.php            # Shared helpers (db, auth, config)
+│   ├── config.php         # Database credentials (NEVER commit)
+│   └── config.sample.php
+├── assets/
+│   ├── app.js            # Bundled React (rebuild dari src/ setelah edit UI)
+│   ├── logo.png
+│   └── icons/
+├── src/
+│   ├── main.jsx          # React entry point
+│   └── App.jsx           # Dashboard component
+├── .well-known/          # SSL certs (Hostinger auto-managed)
+├── schema.sql             # MySQL schema (import via phpMyAdmin)
+└── .gitignore
 ```
 
 ## Common Commands
 
-### Dashboard Frontend
+### Rebuild React Bundle
 ```bash
-# Edit UI → rebuild bundle
 npx esbuild src/main.jsx --bundle --minify --target=es2018 \
-  --outfile=public_html/assets/app.js \
+  --outfile=assets/app.js \
   --define:process.env.NODE_ENV='"production"'
-
-# Increment cache-bust version in public_html/index.html after rebuild
 ```
-
-### Firmware (via Arduino IDE or arduino-cli)
-```bash
-# Compile check (example for MasterGH)
-arduino-cli compile --fqbn esp32:esp32:esp32 \
-  --library "ArduinoJson@7.x" \
-  --library "WiFiManager" \
-  firmware-produksi/MasterGH/
-
-# Flash
-arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32 \
-  firmware-produksi/MasterGH/
-```
+Setelah rebuild, naikkan `?v=` di `index.html` supaya cache browser user refresh.
 
 ### Git
 ```bash
-git init
 git add .
-git commit -m "Initial commit"
+git commit -m "Deskripsi perubahan"
+git push
 ```
+
+## Deploy Checklist (Hostinger Git)
+
+1. Buat subdomain baru di Hostinger
+2. Hubungkan subdomain ke repo GitHub ini
+3. Pilih branch (`dev` untuk dev, `main` untuk production)
+4. Hostinger auto-pull saat push
+
+**File lokal yang dipertahankan saat pull (tidak overwrite):**
+- `api/config.php` — database credentials
+- `.well-known/` — SSL certificates
+
+**Setelah clone/pull pertama:**
+1. Import `schema.sql` via phpMyAdmin
+2. Buat `api/config.php` dari `config.sample.php`
+3. Jalankan `api/setup.php` → catat API key → **HAPUS setup.php**
 
 ## Architecture Notes
 
-### Firmware → Backend Contract
-Devices communicate via REST (not MQTT). Endpoints:
-- `POST /api/telemetry` — device pushes sensor data (7s interval)
-- `GET /api/commands/pending` — device polls commands (2s interval)
-- `POST /api/commands/ack` — device confirms command execution
-- `GET /api/schedules/sync?ver=N` — device syncs schedules from server
-- `POST /api/event` — device reports irrigation/dosing completion
+### Backend API Endpoints
+- `POST /api/telemetry` — device pushes sensor data
+- `GET /api/commands/pending` — device polls commands
+- `POST /api/commands/ack` — device confirms execution
+- `GET /api/schedules/sync?ver=N` — device syncs schedules
+- `POST /api/event` — device reports completion
 
-**API key per device** (from `setup.php` output):
-- GH controller → `gh` key
-- OF2 controller → `of2` key
-- SmartDosing GH → `doser_gh` key
-- SmartDosing OF2 → `doser_of2` key
-
-### Offline-First Design
-Schedules and irrigation logic run 100% locally on ESP32 (NTP-based, stored in NVS). Server is only for:
-- Remote command dispatch (E-stop, manual irrigation)
-- Schedule configuration sync
-- Telemetry persistence & dashboard display
-
-### UDP Local Sync
-GH broadcasts `floatRAW` status via UDP port 4210 → OF2 receives it to control pompa RAW. This path is LOCAL and must NOT be routed through the backend server.
-
-### SmartDosing Auto-Dose
-Controller broadcasts cumulative raw water volume via UDP. SmartDosing listens, detects 10L increments, and triggers A/B injection automatically. `RAWVOL_PREFIX` in SmartDosing.ino must match the controller ("GH:RAWVOL=" or "OF2:RAWVOL=") to prevent cross-system dosing.
-
-## Before Production
-
-1. Set `KJ_API_KEY` in all three firmware sketches
-2. Set `RAWVOL_PREFIX` in SmartDosing.ino ("GH:RAWVOL=" or "OF2:RAWVOL=")
-3. Run `setup.php` on server → save the 3 API keys → **DELETE setup.php**
-4. Flash firmware **one device at a time**, observe 1-2 weeks before next
-5. GH must be flashed first, then OF2, then SmartDosing units
+### Dashboard Mode
+- `LIVE = true` (default): short-poll `/api/state` tiap 5 detik
+- `LIVE = false`: mock ticker tanpa backend (untuk demo)
 
 ## Sensitive Files (never commit)
-- `public_html/api/config.php` (database credentials)
-- `firmware-produksi/*/KJApi.h` — contains `KJ_API_KEY` values per device
+- `api/config.php` — database credentials
 - `Token.txt`
 - `node_modules/`
+- `.well-known/` — SSL certs
