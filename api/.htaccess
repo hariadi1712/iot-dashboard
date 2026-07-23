@@ -1,0 +1,15 @@
+# Kebun Jaya API routing
+RewriteEngine On
+
+# RewriteBase relatif — tidak hardcode /api/ supaya jalan baik di
+# subdomain root (iot.petanipizza.xyz/api) MAUPUN subfolder
+# (petanipizza.xyz/iot/api). Apache menentukan base dari lokasi .htaccess.
+
+# Blokir akses langsung ke file sensitif
+<FilesMatch "^(config\.php|config\.sample\.php|lib\.php)$">
+  Require all denied
+</FilesMatch>
+
+# Semua request yang bukan file nyata -> index.php?r={route}
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ index.php?r=$1 [QSA,L]

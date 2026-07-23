@@ -1,6 +1,5 @@
 # Sensitive credentials — NEVER commit
 api/config.php
-Token.txt
 
 # Node
 node_modules/
@@ -8,9 +7,3 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
-
-# SSL certificates (Hostinger auto-managed)
-.well-known/
-
-# Build output — bundled React (rebuild dari src/ setelah edit UI)
-# Source React files di src/ (version control friendly)
