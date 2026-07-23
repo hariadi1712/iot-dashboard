@@ -1,0 +1,11 @@
+# Kebun Jaya — root
+RewriteEngine On
+
+# Paksa HTTPS
+RewriteCond %{HTTPS} !=on
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+# Cache asset bundle (cache-bust lewat ?v= di index.html)
+<FilesMatch "\.(js|css|woff2)$">
+  Header set Cache-Control "public, max-age=604800"
+</FilesMatch>

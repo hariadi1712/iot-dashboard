@@ -1,0 +1,17 @@
+# Sensitive credentials
+public_html/api/config.php
+Token.txt
+
+# Firmware ESP32 — API key per device, tidak di-commit
+# Firmware punya repo sendiri: https://github.com/hariadi1712/iot-firmware
+firmware-produksi/
+
+# Node (if any)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output (rebuilt from src/)
+# Don't ignore public_html/assets/app.js — it's the deployed bundle

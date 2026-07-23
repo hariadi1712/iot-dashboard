@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0E1B19">
+<title>P² LABS — Admin</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Chivo+Mono:wght@400;700&display=swap');
+  :root{
+    --bg:#0E1B19; --panel:#132824; --raise:#17302B; --line:#1E3A34;
+    --text:#D7E5E0; --dim:#7FA39A; --water:#53C8E8; --run:#61D095;
+    --amber:#F2B84B; --danger:#E4604E; --owner:#B08CE8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Archivo',sans-serif;font-size:15px}
+  .mono{font-family:'Chivo Mono',monospace}
+  .wrap{max-width:720px;margin:0 auto;padding:0 16px 60px}
+  header{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10}
+  header img{height:34px}
+  .htitle{font-weight:800;font-size:15px}
+  .hsub{font-size:11px;color:var(--dim)}
+  .badge{margin-left:auto;font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;padding:5px 10px;border-radius:7px;border:1px solid var(--owner);color:var(--owner)}
+  h2{font-family:'Chivo Mono',monospace;font-size:12px;letter-spacing:.08em;color:var(--dim);margin:22px 4px 10px;font-weight:700}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .flex1{flex:1;min-width:0}
+  .name{font-size:14px;font-weight:600}
+  .sub{font-size:12px;color:var(--dim);margin-top:2px}
+  .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .pill{font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;border:1px solid var(--line);color:var(--dim)}
+  .pill.on{color:var(--run);border-color:var(--run)}
+  .pill.off{color:var(--danger);border-color:var(--danger)}
+  .pill.owner{color:var(--owner);border-color:var(--owner)}
+  input,select{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:11px 12px;font-family:inherit;font-size:14px;margin-top:6px}
+  label{font-size:12px;color:var(--dim);font-weight:600}
+  button{font-family:inherit;font-weight:700;border:none;border-radius:9px;padding:11px 16px;cursor:pointer;font-size:14px}
+  .btn{background:var(--water);color:#04121a}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .btn-danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}
+  .btn-sm{padding:7px 12px;font-size:12px}
+  .grid{display:grid;gap:10px}
+  .note{font-size:12px;color:var(--dim);line-height:1.6}
+  .warn{background:rgba(242,184,75,.08);border:1px solid var(--amber);color:var(--amber);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:11px 18px;font-size:13px;z-index:50;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:90%}
+  .login{max-width:340px;margin:16vh auto 0;text-align:center}
+  .login img{height:56px;margin-bottom:8px}
+  a.back{color:var(--water);font-size:13px;text-decoration:none}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API = "/api";
+const $ = (id) => document.getElementById(id);
+let toastT;
+function toast(m){ let t=$("toast"); if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t);} t.textContent=m; clearTimeout(toastT); toastT=setTimeout(()=>t.remove(),3200); }
+async function api(path, opts){
+  const r = await fetch(API+path, Object.assign({credentials:"include",headers:{"Content-Type":"application/json"}}, opts||{}));
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error || ("HTTP "+r.status));
+  return d;
+}
+
+function loginView(){
+  document.getElementById("app").innerHTML = `
+    <div class="login">
+      <img src="/assets/logo.png" alt="P² LABS">
+      <h2 style="color:var(--dim);margin:4px 0 18px">ADMIN · KHUSUS OWNER</h2>
+      <div class="panel" style="text-align:left">
+        <label>Username</label><input id="u" autocomplete="username">
+        <label style="margin-top:12px;display:block">Password</label><input id="p" type="password" autocomplete="current-password">
+        <button class="btn" style="width:100%;margin-top:16px" onclick="doLogin()">Masuk</button>
+      </div>
+      <a class="back" href="/">← Kembali ke dashboard operator</a>
+    </div>`;
+  $("p").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+}
+async function doLogin(){
+  try{
+    const d = await api("/login",{method:"POST",body:JSON.stringify({username:$("u").value,password:$("p").value})});
+    if(d.role !== "owner"){ toast("Akun ini bukan owner. Admin khusus owner."); return; }
+    boot();
+  }catch(e){ toast(e.message); }
+}
+
+async function boot(){
+  try{
+    const [fleet, users, config, ota] = await Promise.all([
+      api("/admin/fleet"), api("/admin/users"), api("/admin/config"), api("/admin/ota")
+    ]);
+    render(fleet, users, config, ota);
+    if($("cfgDev")) loadDevCfg();
+  }catch(e){
+    if(String(e.message).includes("403")||String(e.message).toLowerCase().includes("owner")){ toast("Khusus owner."); loginView(); }
+    else if(String(e.message).includes("401")||String(e.message).includes("login")){ loginView(); }
+    else toast(e.message);
+  }
+}
+
+function agoTxt(s){ if(s==null)return "belum pernah"; if(s<60)return s+" dtk lalu"; if(s<3600)return Math.floor(s/60)+" mnt lalu"; return Math.floor(s/3600)+" jam lalu"; }
+
+function render(fleet, users, config, ota){
+  const app = document.getElementById("app");
+  const f = fleet.fleet, us = users.users, c = config.config;
+  app.innerHTML = `
+    <header>
+      <img src="/assets/logo.png" alt="P² LABS">
+      <div><div class="htitle">P² LABS · Admin</div><div class="hsub mono">iot.petanipizza.xyz</div></div>
+      <span class="badge">OWNER</span>
+    </header>
+    <div class="wrap">
+      <h2>ARMADA DEVICE</h2>
+      <div class="panel">
+        ${f.map(d=>`
+          <div class="row">
+            <span class="dot" style="background:${d.online?'var(--run)':'var(--danger)'}"></span>
+            <div class="flex1">
+              <div class="name">${d.name}</div>
+              <div class="sub mono">${d.id} · ${d.system.toUpperCase()} · ${agoTxt(d.ago_s)}</div>
+            </div>
+            <span class="pill ${d.online?'on':'off'}">${d.online?'ONLINE':'OFFLINE'}</span>
+          </div>`).join("")}
+        <div class="note" style="margin-top:10px">Ambang offline: ${fleet.offline_after_s} detik tanpa telemetry.</div>
+      </div>
+
+      <h2>MANAJEMEN USER</h2>
+      <div class="panel">
+        ${us.map(u=>`
+          <div class="row">
+            <div class="flex1">
+              <div class="name">${u.username}</div>
+              <div class="sub mono">dibuat ${new Date(u.created_at).toLocaleDateString('id-ID')}</div>
+            </div>
+            <span class="pill ${u.role==='owner'?'owner':''}">${u.role.toUpperCase()}</span>
+            <button class="btn-ghost btn-sm" onclick="pwPrompt(${u.id},'${u.username}')">Password</button>
+            <button class="btn-danger btn-sm" onclick="delUser(${u.id},'${u.username}')">Hapus</button>
+          </div>`).join("")}
+      </div>
+      <div class="panel">
+        <div class="name" style="margin-bottom:10px">Tambah user baru</div>
+        <div class="grid">
+          <div><label>Username</label><input id="nu"></div>
+          <div><label>Password (min 8)</label><input id="np" type="text"></div>
+          <div><label>Role</label>
+            <select id="nr"><option value="operator">Operator</option><option value="owner">Owner</option></select>
+          </div>
+          <button class="btn" onclick="addUser()">Tambah User</button>
+        </div>
+      </div>
+
+      <h2>KONFIGURASI SISTEM</h2>
+      <div class="panel">
+        <div class="grid">
+          <div>
+            <label>Retensi telemetry mentah (hari)</label>
+            <input id="cfg_ret" type="number" min="1" value="${c.telemetry_retention_days}">
+            <div class="note" style="margin-top:4px">Data telemetry lebih tua dihapus otomatis. History harian tetap permanen.</div>
+          </div>
+          <div>
+            <label>Ambang device offline (detik)</label>
+            <input id="cfg_off" type="number" min="5" value="${c.device_offline_after_s}">
+            <div class="note" style="margin-top:4px">Device dianggap offline jika tak kirim telemetry selama ini.</div>
+          </div>
+          <button class="btn" onclick="saveCfg()">Simpan Konfigurasi</button>
+        </div>
+      </div>
+
+      <h2>KALIBRASI &amp; PARAMETER DEVICE</h2>
+      <div class="panel">
+        <div class="note" style="margin-bottom:12px">
+          Parameter ini dikirim ke device saat sync (~60 dtk) dan disimpan di device.
+          Semua divalidasi ke rentang aman. Ubah hanya jika paham dampaknya.
+        </div>
+        <label>Pilih device</label>
+        <select id="cfgDev" onchange="loadDevCfg()">
+          ${f.filter(d=>d.role==='controller'||d.role==='doser').map(d=>`<option value="${d.id}" data-role="${d.role}">${d.name} (${d.id})</option>`).join("")}
+        </select>
+        <div id="cfgForm" style="margin-top:14px">
+          <div class="grid">
+            <div id="controllerFields">
+            <div>
+              <label>Kalibrasi pressure (pScale)</label>
+              <input id="c_pScale" type="number" step="0.1" placeholder="mis. 55">
+              <div class="note" style="margin-top:4px">Skala ADC→PSI. Naikkan jika pembacaan terlalu kecil. Range 1–500.</div>
+            </div>
+            <div>
+              <label>Offset pressure (pOffset)</label>
+              <input id="c_pOffset" type="number" step="0.1" placeholder="mis. 0">
+              <div class="note" style="margin-top:4px">Geser pembacaan naik/turun (psi). Mis. jika idle harusnya 0 tapi baca 0.3, isi -0.3. Range ±50.</div>
+            </div>
+            <div>
+              <label>Total titik irigasi</label>
+              <input id="c_points" type="number" min="1" placeholder="mis. 1">
+              <div class="note" style="margin-top:4px">Jumlah titik/emitter. Untuk hitung liter per titik. Range 1–200000.</div>
+            </div>
+            <div>
+              <label>Kalibrasi flow air baku (pulsa/L)</label>
+              <input id="c_rawPPL" type="number" step="1" placeholder="mis. 450">
+              <div class="note" style="margin-top:4px">YF-S201 ≈ 450 pulsa/liter. Untuk auto-dose. Kalibrasi jika volume air baku meleset. Range 10–5000.</div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1">
+                <label>Pressure min (psi)</label>
+                <input id="c_pMin" type="number" step="0.1" placeholder="mis. 5">
+              </div>
+              <div style="flex:1">
+                <label>Pressure max (psi)</label>
+                <input id="c_pMax" type="number" step="0.1" placeholder="mis. 16">
+              </div>
+            </div>
+            <div class="note">Batas bawah/atas gauge &amp; alarm tekanan. Max harus &gt; min.</div>
+            </div>
+
+            <div id="doserGuards" style="display:none;border-top:1px solid var(--line);padding-top:12px;margin-top:6px">
+              <div style="font-weight:600;margin-bottom:8px">Guard dosing (Smartdosing)</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:120px">
+                  <label>Dry-run timeout (dtk)</label>
+                  <input id="c_dryrun" type="number" step="1" placeholder="10">
+                  <div class="note" style="margin-top:4px">Nol aliran → alarm. 2–60 dtk.</div>
+                </div>
+                <div style="flex:1;min-width:120px">
+                  <label>Stall timeout (dtk)</label>
+                  <input id="c_stall" type="number" step="1" placeholder="8">
+                  <div class="note" style="margin-top:4px">Aliran mandek di tengah → alarm. 2–60 dtk.</div>
+                </div>
+                <div style="flex:1;min-width:120px">
+                  <label>Durasi maks (dtk)</label>
+                  <input id="c_dosemax" type="number" step="1" placeholder="120">
+                  <div class="note" style="margin-top:4px">Batas absolut 1 sesi. 10–600 dtk.</div>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn" onclick="saveDevCfg()">Simpan ke Device</button>
+            <div class="note" id="cfgVer"></div>
+          </div>
+        </div>
+      </div>
+
+      <h2>OTA FIRMWARE</h2>
+      <div class="panel">
+        <div class="name">Update firmware jarak jauh</div>
+        <div class="warn">
+          <b>Belum aktif.</b> ${ota.note}
+          Flash pertama tetap via kabel USB. OTA (update wireless berikutnya) akan
+          ditambahkan setelah bench test device pertama selesai — supaya tidak
+          mem-push firmware belum-teruji ke pengontrol pompa.
+        </div>
+        <div class="note" style="margin-top:12px">
+          Saat aktif nanti: kamu compile <span class="mono">.bin</span> di Arduino IDE,
+          upload di sini, pilih device tujuan, lalu device menariknya sendiri via WiFi.
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-top:20px">
+        <a class="back" href="/">← Dashboard operator</a>
+        &nbsp;·&nbsp;
+        <a class="back" href="#" onclick="doLogout();return false;">Keluar</a>
+      </div>
+    </div>`;
+}
+
+async function addUser(){
+  try{
+    await api("/admin/users/create",{method:"POST",body:JSON.stringify({
+      username:$("nu").value.trim(), password:$("np").value, role:$("nr").value
+    })});
+    toast("User ditambahkan."); boot();
+  }catch(e){ toast(e.message); }
+}
+function pwPrompt(id,name){
+  const p = prompt("Password baru untuk "+name+" (min 8 karakter):");
+  if(p===null) return;
+  if(p.length<8){ toast("Password minimal 8 karakter."); return; }
+  api("/admin/users/password",{method:"POST",body:JSON.stringify({id,password:p})})
+    .then(()=>toast("Password "+name+" diperbarui.")).catch(e=>toast(e.message));
+}
+function delUser(id,name){
+  if(!confirm("Hapus user "+name+"? Tidak bisa dibatalkan.")) return;
+  api("/admin/users/delete",{method:"POST",body:JSON.stringify({id})})
+    .then(()=>{toast("User "+name+" dihapus.");boot();}).catch(e=>toast(e.message));
+}
+async function saveCfg(){
+  try{
+    await api("/admin/config",{method:"POST",body:JSON.stringify({
+      telemetry_retention_days:+$("cfg_ret").value, device_offline_after_s:+$("cfg_off").value
+    })});
+    toast("Konfigurasi disimpan.");
+  }catch(e){ toast(e.message); }
+}
+async function doLogout(){ try{ await api("/logout",{method:"POST"}); }catch(e){} loginView(); }
+
+async function loadDevCfg(){
+  const sel = $("cfgDev"); if(!sel) return;
+  const dev = sel.value; if(!dev) return;
+  try{
+    const d = await api("/admin/device-config?device="+encodeURIComponent(dev));
+    const c = d.config || {};
+    $("c_pScale").value = c.pScale ?? "";
+    $("c_pOffset").value = c.pOffset ?? "";
+    $("c_points").value = c.totalIrrPoints ?? "";
+    $("c_rawPPL").value = c.rawPPL ?? "";
+    $("c_pMin").value   = c.pMin ?? "";
+    $("c_pMax").value   = c.pMax ?? "";
+    // Guard dosing (ms di server -> detik di UI)
+    $("c_dryrun").value  = c.dryrunMs ? Math.round(c.dryrunMs/1000) : "";
+    $("c_stall").value   = c.stallMs ? Math.round(c.stallMs/1000) : "";
+    $("c_dosemax").value = c.doseMaxMs ? Math.round(c.doseMaxMs/1000) : "";
+    // tampilkan guard hanya untuk doser
+    const sel = $("cfgDev"), opt = sel.options[sel.selectedIndex];
+    const isDoser = opt && opt.getAttribute("data-role") === "doser";
+    $("doserGuards").style.display = isDoser ? "block" : "none";
+    $("controllerFields").style.display = isDoser ? "none" : "block";
+    $("cfgVer").textContent = d.version ? ("Versi config aktif: v"+d.version) : "Belum ada config tersimpan (device pakai default firmware).";
+  }catch(e){ toast(e.message); }
+}
+async function saveDevCfg(){
+  const dev = $("cfgDev").value;
+  const body = { device: dev };
+  const map = { c_pScale:"pScale", c_pOffset:"pOffset", c_points:"totalIrrPoints", c_rawPPL:"rawPPL", c_pMin:"pMin", c_pMax:"pMax" };
+  for(const el in map){ const v = $(el).value; if(v !== "") body[map[el]] = parseFloat(v); }
+  // Guard dosing: input detik -> kirim ms
+  const guardMap = { c_dryrun:"dryrunMs", c_stall:"stallMs", c_dosemax:"doseMaxMs" };
+  for(const el in guardMap){ const v = $(el).value; if(v !== "") body[guardMap[el]] = Math.round(parseFloat(v)*1000); }
+  try{
+    const d = await api("/admin/device-config",{method:"POST",body:JSON.stringify(body)});
+    toast("Config disimpan (v"+d.version+"). Device menerapkan dalam ~60 dtk.");
+    $("cfgVer").textContent = "Versi config aktif: v"+d.version;
+  }catch(e){ toast(e.message); }
+}
+
+boot();
+</script>
+</body>
+</html>

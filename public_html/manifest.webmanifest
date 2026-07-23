@@ -1,0 +1,16 @@
+{
+  "name": "P² LABS — Kontrol Irigasi",
+  "short_name": "P² LABS",
+  "description": "Panel kontrol & monitoring irigasi-dosing greenhouse",
+  "start_url": "/?pwa=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1B19",
+  "theme_color": "#0E1B19",
+  "icons": [
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
