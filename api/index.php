@@ -28,14 +28,16 @@ function route_targets(string $system, string $type): array {
     case 'irrigate':
     case 'valve':
     case 'pump_dist':
-    case 'recharge':      // hanya bermakna di of2, tapi routing tetap ke controller
+    case 'recharge':
+    case 'system_power':
+    case 'restart':
       return [$d['controller']];
     case 'estop':
       return [$d['controller'], $d['doser']];
     case 'dose':
     case 'dose_config':
-    case 'autodose':      // toggle & konsentrasi auto-dose -> ke smartdosing
-    case 'clean':         // cleaning cycle dosing -> ke smartdosing
+    case 'autodose':
+    case 'clean':
       return [$d['doser']];
     default:
       return [];
