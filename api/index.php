@@ -369,14 +369,131 @@ try {
       json_ok(['ok' => true, 'saved' => $saved]);
     }
 
-    // OTA — FONDASI SAJA. Firmware belum OTA-ready; endpoint ini
-    // mencatat metadata .bin, belum mem-push ke device.
-    case 'GET admin/ota': {
+    /* ================= OTA ADMIN ================= */
+    case 'GET admin/ota/firmwares': {
       require_owner();
+      $rows = db()->query(
+        'SELECT id, device_id, version, size_bytes, notes, is_active, uploaded_by, created_at
+         FROM ota_firmwares ORDER BY created_at DESC'
+      )->fetchAll();
+      json_ok(['firmwares' => array_map(function($r){
+        return [
+          'id'=>(int)$r['id'], 'device_id'=>$r['device_id'], 'version'=>$r['version'],
+          'size_kb'=>round((int)$r['size_bytes']/1024,1),
+          'checksum'=>substr($r['size_bytes'],0,0), // placeholder — not exposing checksum to UI
+          'notes'=>$r['notes'],
+          'is_active'=>(bool)(int)$r['is_active'],
+          'uploaded_by'=>$r['uploaded_by'], 'created_at'=>$r['created_at'],
+        ];
+      }, $rows)]);
+    }
+
+    case 'POST admin/ota/upload': {
+      require_owner();
+      $u = require_user();
+      if (empty($_FILES['firmware']) || $_FILES['firmware']['error'] !== UPLOAD_ERR_OK) {
+        json_err(400, 'File firmware tidak ditemukan atau error upload.');
+      }
+      $file = $_FILES['firmware'];
+      $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+      if ($ext !== 'bin') json_err(400, 'Hanya file .bin yang diterima.');
+      $MAX_SIZE = 2 * 1024 * 1024;
+      if ($file['size'] > $MAX_SIZE) json_err(400, 'File terlalu besar. Maks 2 MB.');
+      if ($file['size'] < 4096) json_err(400, 'File terlalu kecil — bukan firmware valid.');
+      $deviceId = trim((string)($_POST['device_id'] ?? ''));
+      $version  = trim((string)($_POST['version'] ?? ''));
+      $notes    = trim((string)($_POST['notes'] ?? ''));
+      $validDevices = ['gh','of2','doser_gh','doser_of2','_all'];
+      if (!in_array($deviceId, $validDevices, true)) {
+        json_err(400, 'device_id harus: ' . implode(' | ', $validDevices));
+      }
+      if (!preg_match('/^[\w.\-]{1,24}$/', $version)) {
+        json_err(400, 'Version string tidak valid (maks 24 char).');
+      }
+      $checksum = hash_file('sha256', $file['tmp_name']);
+      if (!$checksum) json_err(500, 'Gagal menghitung checksum.');
+      $otaDir = __DIR__ . '/../ota';
+      if (!is_dir($otaDir)) mkdir($otaDir, 0755, true);
+      $shortHash = substr($checksum, 0, 8);
+      $filename = "{$deviceId}_{$version}_{$shortHash}.bin";
+      $destPath = $otaDir . '/' . $filename;
+      if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+        json_err(500, 'Gagal menyimpan file firmware.');
+      }
+      $dup = db()->prepare('SELECT id FROM ota_firmwares WHERE checksum = ?');
+      $dup->execute([$checksum]);
+      if ($existing = $dup->fetch()) {
+        @unlink($destPath);
+        json_ok(['ok' => true, 'duplicate' => true, 'id' => (int)$existing['id']]);
+      }
+      db()->prepare(
+        'INSERT INTO ota_firmwares (device_id, version, filename, size_bytes, checksum, notes, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )->execute([$deviceId, $version, $filename, $file['size'], $checksum, $notes ?: null, $u['username']]);
+      json_ok(['ok' => true, 'id' => (int)db()->lastInsertId(), 'checksum' => $checksum]);
+    }
+
+    case 'DELETE admin/ota/firmware': {
+      require_owner();
+      $b = body_json();
+      $id = (int)($b['id'] ?? 0);
+      if ($id <= 0) json_err(400, 'id firmware wajib.');
+      $st = db()->prepare('SELECT filename FROM ota_firmwares WHERE id = ?');
+      $st->execute([$id]);
+      $row = $st->fetch();
+      if (!$row) json_err(404, 'Firmware tidak ditemukan.');
+      $path = __DIR__ . '/../ota/' . $row['filename'];
+      if (is_file($path)) @unlink($path);
+      db()->prepare('DELETE FROM ota_firmwares WHERE id = ?')->execute([$id]);
+      json_ok();
+    }
+
+    case 'POST admin/ota/apply': {
+      require_owner();
+      $b = body_json();
+      $id = (int)($b['id'] ?? 0);
+      if ($id <= 0) json_err(400, 'id firmware wajib.');
+      $st = db()->prepare('SELECT device_id, version, filename FROM ota_firmwares WHERE id = ?');
+      $st->execute([$id]);
+      $fw = $st->fetch();
+      if (!$fw) json_err(404, 'Firmware tidak ditemukan.');
+      $targets = $fw['device_id'] === '_all'
+        ? ['gh','of2','doser_gh','doser_of2']
+        : [$fw['device_id']];
+      $pdo = db();
+      $pdo->beginTransaction();
+      try {
+        $deact = $pdo->prepare('UPDATE ota_firmwares SET is_active = 0 WHERE device_id = ?');
+        $activate = $pdo->prepare('UPDATE ota_firmwares SET is_active = 1 WHERE id = ?');
+        foreach ($targets as $t) { $deact->execute([$t]); }
+        $activate->execute([$id]);
+        $pdo->commit();
+      } catch (Throwable $e) { $pdo->rollBack(); throw $e; }
+      json_ok(['ok' => true, 'applied_to' => $targets, 'version' => $fw['version']]);
+    }
+
+    /* ================= OTA DEVICE ================= */
+    case 'GET ota': {
+      // route = "ota/gh" atau "ota/of2" dst
+      $deviceId = substr($route, 4); // hilangkan prefix "ota/"
+      if (!in_array($deviceId, ['gh','of2','doser_gh','doser_of2'], true)) {
+        json_err(400, 'device_id tidak valid.');
+      }
+      touch_device($deviceId);
+      $st = db()->prepare(
+        'SELECT id, version, filename, size_bytes, checksum FROM ota_firmwares
+         WHERE device_id = ? AND is_active = 1 LIMIT 1'
+      );
+      $st->execute([$deviceId]);
+      $fw = $st->fetch();
+      if (!$fw) { json_ok(['has_update' => false]); }
       json_ok([
-        'enabled' => false,
-        'note' => 'OTA belum aktif: firmware perlu rutin OTA-pull dulu (ditambahkan setelah bench test).',
-        'firmwares' => get_config_val('ota:firmwares', []),
+        'has_update' => true,
+        'id' => (int)$fw['id'],
+        'version' => $fw['version'],
+        'size' => (int)$fw['size_bytes'],
+        'checksum' => $fw['checksum'],
+        'url' => '/api/ota/' . $deviceId . '/firmware.bin',
       ]);
     }
 
@@ -439,6 +556,30 @@ try {
 
     default:
       json_err(404, "Endpoint tidak ditemukan: $method /$route");
+  }
+
+  // === Dynamic OTA binary download (di luar switch) ===
+  if ($method === 'GET' && preg_match('#^ota/([\w_]+)/firmware\.bin$#', $route, $m)) {
+    $deviceId = $m[1];
+    if (!in_array($deviceId, ['gh','of2','doser_gh','doser_of2'], true)) {
+      json_err(400, 'device_id tidak valid.');
+    }
+    touch_device($deviceId);
+    $st = db()->prepare(
+      'SELECT filename, size_bytes FROM ota_firmwares
+       WHERE device_id = ? AND is_active = 1 LIMIT 1'
+    );
+    $st->execute([$deviceId]);
+    $fw = $st->fetch();
+    if (!$fw) json_err(404, 'Tidak ada firmware aktif untuk device ini.');
+    $path = __DIR__ . '/../ota/' . $fw['filename'];
+    if (!is_file($path)) json_err(404, 'File firmware tidak ditemukan di server.');
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="firmware_' . $deviceId . '.bin"');
+    header('Content-Length: ' . filesize($path));
+    header('Cache-Control: no-cache');
+    readfile($path);
+    exit;
   }
 } catch (PDOException $e) {
   error_log('KJ-API DB: ' . $e->getMessage());

@@ -3,6 +3,9 @@
 api/setup.php
 Token.txt
 
+# Uploaded firmware binaries (per device, dari Arduino IDE)
+ota/
+
 # Node (if any)
 node_modules/
 

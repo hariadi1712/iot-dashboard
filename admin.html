@@ -44,6 +44,7 @@
   .grid{display:grid;gap:10px}
   .note{font-size:12px;color:var(--dim);line-height:1.6}
   .warn{background:rgba(242,184,75,.08);border:1px solid var(--amber);color:var(--amber);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:10px}
+  .ota-table{width:100%;border-collapse:collapse;font-size:13px}
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:11px 18px;font-size:13px;z-index:50;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:90%}
   .login{max-width:340px;margin:16vh auto 0;text-align:center}
   .login img{height:56px;margin-bottom:8px}
@@ -59,8 +60,15 @@ const $ = (id) => document.getElementById(id);
 let toastT;
 function toast(m){ let t=$("toast"); if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t);} t.textContent=m; clearTimeout(toastT); toastT=setTimeout(()=>t.remove(),3200); }
 async function api(path, opts){
-  const r = await fetch(API+path, Object.assign({credentials:"include",headers:{"Content-Type":"application/json"}}, opts||{}));
-  const d = await r.json().catch(()=>({}));
+  opts = opts || {};
+  opts.credentials = "include";
+  // FormData automatically sets Content-Type with boundary — jangan override
+  if (!(opts.body instanceof FormData)) {
+    opts.headers = Object.assign({"Content-Type":"application/json"}, opts.headers || {});
+  }
+  const r = await fetch(API+path, opts);
+  const ct = r.headers.get("content-type") || "";
+  const d = ct.includes("json") ? await r.json().catch(()=>({})) : {};
   if(!r.ok) throw new Error(d.error || ("HTTP "+r.status));
   return d;
 }
@@ -89,11 +97,12 @@ async function doLogin(){
 
 async function boot(){
   try{
-    const [fleet, users, config, ota] = await Promise.all([
-      api("/admin/fleet"), api("/admin/users"), api("/admin/config"), api("/admin/ota")
+    const [fleet, users, config] = await Promise.all([
+      api("/admin/fleet"), api("/admin/users"), api("/admin/config")
     ]);
-    render(fleet, users, config, ota);
+    render(fleet, users, config);
     if($("cfgDev")) loadDevCfg();
+    loadOtaList();
   }catch(e){
     if(String(e.message).includes("403")||String(e.message).toLowerCase().includes("owner")){ toast("Khusus owner."); loginView(); }
     else if(String(e.message).includes("401")||String(e.message).includes("login")){ loginView(); }
@@ -103,7 +112,7 @@ async function boot(){
 
 function agoTxt(s){ if(s==null)return "belum pernah"; if(s<60)return s+" dtk lalu"; if(s<3600)return Math.floor(s/60)+" mnt lalu"; return Math.floor(s/3600)+" jam lalu"; }
 
-function render(fleet, users, config, ota){
+function render(fleet, users, config){
   const app = document.getElementById("app");
   const f = fleet.fleet, us = users.users, c = config.config;
   app.innerHTML = `
@@ -243,18 +252,41 @@ function render(fleet, users, config, ota){
       </div>
 
       <h2>OTA FIRMWARE</h2>
-      <div class="panel">
-        <div class="name">Update firmware jarak jauh</div>
-        <div class="warn">
-          <b>Belum aktif.</b> ${ota.note}
-          Flash pertama tetap via kabel USB. OTA (update wireless berikutnya) akan
-          ditambahkan setelah bench test device pertama selesai — supaya tidak
-          mem-push firmware belum-teruji ke pengontrol pompa.
+      <div class="panel" id="otaPanel">
+        <div class="name" style="margin-bottom:10px">Upload &amp; kelola firmware</div>
+
+        <!-- Upload form -->
+        <div class="grid" style="margin-bottom:16px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px">
+              <label>File .bin</label>
+              <input type="file" id="otaFile" accept=".bin" style="background:var(--raise);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 10px;width:100%">
+            </div>
+            <div style="flex:1;min-width:100px">
+              <label>Target device</label>
+              <select id="otaDevice" style="margin-top:6px">
+                <option value="gh">GH Controller</option>
+                <option value="of2">OF2 Controller</option>
+                <option value="doser_gh">SmartDosing GH</option>
+                <option value="doser_of2">SmartDosing OF2</option>
+                <option value="_all">Semua device</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:100px">
+              <label>Version</label>
+              <input id="otaVersion" type="text" placeholder="mis. 1.2.0" style="margin-top:6px">
+            </div>
+          </div>
+          <div style="margin-top:6px">
+            <label>Catatan (opsional)</label>
+            <input id="otaNotes" type="text" placeholder="mis. Fix dry-run guard" style="margin-top:4px">
+          </div>
+          <div class="note" style="margin-top:4px">Maks 2 MB. Hanya .bin. ESP32 4MB+ flash. Compile di Arduino IDE.</div>
+          <button class="btn" style="margin-top:10px" onclick="uploadFirmware()" id="otaUploadBtn">Upload Firmware</button>
         </div>
-        <div class="note" style="margin-top:12px">
-          Saat aktif nanti: kamu compile <span class="mono">.bin</span> di Arduino IDE,
-          upload di sini, pilih device tujuan, lalu device menariknya sendiri via WiFi.
-        </div>
+
+        <!-- Firmware list -->
+        <div id="otaList"></div>
       </div>
 
       <div style="text-align:center;margin-top:20px">
@@ -332,6 +364,73 @@ async function saveDevCfg(){
     toast("Config disimpan (v"+d.version+"). Device menerapkan dalam ~60 dtk.");
     $("cfgVer").textContent = "Versi config aktif: v"+d.version;
   }catch(e){ toast(e.message); }
+}
+
+async function uploadFirmware(){
+  const fileEl = $("otaFile"), device = $("otaDevice").value;
+  const version = $("otaVersion").value.trim(), notes = $("otaNotes").value.trim();
+  if (!fileEl.files[0]) { toast("Pilih file .bin terlebih dahulu."); return; }
+  if (!version) { toast("Version string wajib diisi."); return; }
+  const btn = $("otaUploadBtn");
+  btn.disabled = true; btn.textContent = "Mengupload...";
+  const form = new FormData();
+  form.append("firmware", fileEl.files[0]);
+  form.append("device_id", device);
+  form.append("version", version);
+  form.append("notes", notes);
+  try {
+    const r = await fetch("/api/admin/ota/upload", {method:"POST", credentials:"include", body:form});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Upload gagal.");
+    toast(d.duplicate ? "Firmware sudah ada (duplikat checksum)." : "Firmware berhasil diupload.");
+    $("otaFile").value = ""; $("otaVersion").value = ""; $("otaNotes").value = "";
+    loadOtaList();
+  } catch(e) { toast(e.message);
+  } finally { btn.disabled = false; btn.textContent = "Upload Firmware"; }
+}
+
+async function loadOtaList(){
+  const el = $("otaList"); if (!el) return;
+  try {
+    const d = await api("/admin/ota/firmwares");
+    const LABELS = {gh:"GH Controller", of2:"OF2 Controller", doser_gh:"SmartDosing GH", doser_of2:"SmartDosing OF2", _all:"Semua device"};
+    if (!d.firmwares || !d.firmwares.length) {
+      el.innerHTML = '<div class="note">Belum ada firmware diupload.</div>'; return;
+    }
+    el.innerHTML = `<table class="ota-table"><thead><tr style="border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:6px 4px;color:var(--dim);font-weight:700">Device</th>
+      <th style="text-align:left;padding:6px 4px;color:var(--dim);font-weight:700">Ver</th>
+      <th style="text-align:left;padding:6px 4px;color:var(--dim);font-weight:700">Size</th>
+      <th style="text-align:left;padding:6px 4px;color:var(--dim);font-weight:700">Aktif</th>
+      <th style="text-align:left;padding:6px 4px;color:var(--dim);font-weight:700">Diupload</th>
+      <th style="padding:6px 4px"></th></tr></thead><tbody>
+      ${d.firmwares.map(f => `<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:8px 4px"><span class="pill">${LABELS[f.device_id]||f.device_id}</span></td>
+        <td style="padding:8px 4px;font-family:'Chivo Mono',monospace;font-weight:700">${f.version}</td>
+        <td style="padding:8px 4px;color:var(--dim)">${f.size_kb} KB</td>
+        <td style="padding:8px 4px">${f.is_active?'<span class="pill on">AKTIF</span>':'<span class="pill off">—</span>'}</td>
+        <td style="padding:8px 4px;color:var(--dim);font-size:12px">${new Date(f.created_at).toLocaleDateString("id-ID")}</td>
+        <td style="padding:8px 4px;white-space:nowrap">
+          ${f.is_active?'<span class="note">✓ device akan menarik</span>':
+            `<button class="btn-ghost btn-sm" onclick="applyFirmware(${f.id},'${f.version}')">Apply</button>`}
+          <button class="btn-danger btn-sm" style="margin-left:4px" onclick="deleteFirmware(${f.id},'${f.version}')">Hapus</button>
+        </td></tr>`).join("")}
+    </tbody></table>`;
+  } catch(e) { el.innerHTML = `<div class="note">Gagal load: ${e.message}</div>`; }
+}
+
+async function applyFirmware(id, version){
+  if (!confirm("Apply firmware v"+version+" ke device?\n\nDevice akan menarik firmware saat next OTA check (~60 detik).")) return;
+  try { const d = await api("/admin/ota/apply",{method:"POST",body:JSON.stringify({id})});
+    toast("Firmware v"+version+" diapply. Device menarik dalam ~60 detik."); loadOtaList();
+  } catch(e) { toast(e.message); }
+}
+
+async function deleteFirmware(id, version){
+  if (!confirm("Hapus firmware v"+version+"?\nFile akan dihapus dari server.")) return;
+  try { await api("/admin/ota/firmware",{method:"DELETE",body:JSON.stringify({id})});
+    toast("Firmware dihapus."); loadOtaList();
+  } catch(e) { toast(e.message); }
 }
 
 boot();
