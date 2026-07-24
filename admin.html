@@ -122,7 +122,7 @@ function render(fleet, users, config){
       <span class="badge">OWNER</span>
     </header>
     <div class="wrap">
-      <h2>ARMADA DEVICE</h2>
+      <h2 id="fleet">ARMADA DEVICE</h2>
       <div class="panel">
         ${f.map(d=>`
           <div class="row">
@@ -136,7 +136,7 @@ function render(fleet, users, config){
         <div class="note" style="margin-top:10px">Ambang offline: ${fleet.offline_after_s} detik tanpa telemetry.</div>
       </div>
 
-      <h2>MANAJEMEN USER</h2>
+      <h2 id="users">MANAJEMEN USER</h2>
       <div class="panel">
         ${us.map(u=>`
           <div class="row">
@@ -161,7 +161,7 @@ function render(fleet, users, config){
         </div>
       </div>
 
-      <h2>KONFIGURASI SISTEM</h2>
+      <h2 id="config">KONFIGURASI SISTEM</h2>
       <div class="panel">
         <div class="grid">
           <div>
@@ -178,7 +178,7 @@ function render(fleet, users, config){
         </div>
       </div>
 
-      <h2>KALIBRASI &amp; PARAMETER DEVICE</h2>
+      <h2 id="calibration">KALIBRASI &amp; PARAMETER DEVICE</h2>
       <div class="panel">
         <div class="note" style="margin-bottom:12px">
           Parameter ini dikirim ke device saat sync (~60 dtk) dan disimpan di device.
@@ -251,7 +251,7 @@ function render(fleet, users, config){
         </div>
       </div>
 
-      <h2>OTA FIRMWARE</h2>
+      <h2 id="ota">OTA FIRMWARE</h2>
       <div class="panel" id="otaPanel">
         <div class="name" style="margin-bottom:10px">Upload &amp; kelola firmware</div>
 

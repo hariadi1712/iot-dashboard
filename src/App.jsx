@@ -131,6 +131,22 @@ const CSS = `
 .kj input::placeholder{color:var(--dim);opacity:.6}
 .kj input[type=time]{color-scheme:dark}
 .kj header{padding:13px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
+.kj .hamburger{padding:8px;background:transparent;border:none;cursor:pointer;color:var(--dim);display:flex;flex-direction:column;gap:4px;margin-left:auto}
+.kj .hamburger span{display:block;width:22px;height:2px;background:var(--dim);border-radius:2px;transition:all .2s}
+.kj .hamburger.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.kj .hamburger.open span:nth-child(2){opacity:0}
+.kj .hamburger.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+.kj .menu-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:40}
+.kj .menu-panel{position:fixed;top:0;right:0;bottom:0;width:280px;background:var(--panel);border-left:1px solid var(--line);z-index:50;transform:translateX(100%);transition:transform .3s}
+.kj .menu-panel.open{transform:translateX(0)}
+.kj .menu-header{padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.kj .menu-title{font-weight:700;font-size:15px}
+.kj .menu-section{margin:8px 0}
+.kj .menu-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--dim);padding:8px 16px 4px}
+.kj .menu-item{display:flex;align-items:center;gap:12px;padding:12px 16px;color:var(--text);cursor:pointer;font-size:14px;text-decoration:none}
+.kj .menu-item:hover{background:var(--raise)}
+.kj .menu-item svg{width:20px;height:20px;flex-shrink:0;color:var(--dim)}
+.kj .menu-divider{height:1px;background:var(--line);margin:8px 0}
 .kj .sysbar{display:flex;gap:0;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:63px;z-index:19}
 .kj .sysbtn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 8px;border:none;background:transparent;color:var(--dim);font-family:'Archivo',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
 .kj .sysbtn.active{color:var(--text);border-bottom-color:var(--water);font-weight:800}
@@ -383,6 +399,7 @@ export default function KebunJayaDashboard() {
   const [tab, setTab] = useState("monitor");
   const [toast, setToast] = useState("");
   const [estopArm, setEstopArm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);  // hamburger menu
   const [schedFormOpen, setSchedFormOpen] = useState(false);
   const [nsTime, setNsTime] = useState("06:00");
 
@@ -717,7 +734,55 @@ export default function KebunJayaDashboard() {
           <div className="hsub mono">iot.petanipizza.xyz{LIVE ? "" : " · MODE SIMULASI"}</div>
         </div>
         <div className={`sbadge mono ${S.estop ? "estop" : S.pumpDist ? "run" : ""}`}>{S.status}</div>
+        <button className={`hamburger ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
       </header>
+
+      {/* Hamburger Menu Overlay */}
+      {menuOpen && <div className="menu-overlay" onClick={() => setMenuOpen(false)} />}
+
+      {/* Hamburger Menu Panel */}
+      <div className={`menu-panel ${menuOpen ? "open" : ""}`}>
+        <div className="menu-header">
+          <img src="/assets/logo.png" alt="P² LABS" style={{height:32,width:"auto"}} />
+          <span className="menu-title">Menu</span>
+          <button onClick={() => setMenuOpen(false)} style={{marginLeft:"auto",background:"transparent",border:"none",color:"var(--dim)",fontSize:20,cursor:"pointer"}}>✕</button>
+        </div>
+        <div className="menu-section">
+          <div className="menu-section-title">ADMIN</div>
+          <a className="menu-item" href="/admin.html" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            Armada Device
+          </a>
+          <a className="menu-item" href="/admin.html#users" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Manajemen User
+          </a>
+          <a className="menu-item" href="/admin.html#config" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Konfigurasi Sistem
+          </a>
+          <a className="menu-item" href="/admin.html#calibration" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            Kalibrasi Device
+          </a>
+          <a className="menu-item" href="/admin.html#ota" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            OTA Firmware
+          </a>
+        </div>
+        <div className="menu-divider" />
+        <div className="menu-section">
+          <div className="menu-section-title">LAINNYA</div>
+          <a className="menu-item" href="/" target="_self" onClick={() => setMenuOpen(false)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </a>
+        </div>
+      </div>
 
       {/* Pemilih sistem GH / OF2 */}
       <div className="sysbar">
@@ -1491,10 +1556,7 @@ export default function KebunJayaDashboard() {
             </div>
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)", textAlign: "center" }}>
-              <a href="/admin.html" style={{ color: "var(--dim)", fontSize: 13, textDecoration: "none" }}>
-                ⚙ Admin &amp; Kalibrasi Device →
-              </a>
-              <div className="note" style={{ marginTop: 4 }}>Khusus owner: kelola user, kalibrasi sensor, parameter device.</div>
+              <div className="note" style={{ fontSize: 12 }}>Klik menu untuk akses Admin</div>
             </div>
           </div>
         )}
