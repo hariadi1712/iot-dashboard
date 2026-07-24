@@ -101,7 +101,7 @@ try {
         $st->execute([$dev['doser']]);
         if ($row = $st->fetch()) {
           $dd = json_decode($row['data'], true) ?: [];
-          foreach (['pumpDoseA','pumpDoseB','doseTankA','doseTankB','doseCapA','doseCapB'] as $k) {
+          foreach (['pumpDoseA','pumpDoseB','doseTankA','doseTankB','doseCapA','doseCapB','systemEnabled'] as $k) {
             if (array_key_exists($k, $dd)) $s[$k] = $dd[$k];
           }
         }

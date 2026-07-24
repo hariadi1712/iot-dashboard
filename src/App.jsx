@@ -32,7 +32,8 @@ const SYS_TEMPLATE = {
   konsA: 10, konsB: 10, refEC: 2.0, targetEC: 2.0,
   autoDose: true, useRawSensor: true, ratioLock: false,
   rawWaterSeen: 0, autoDoseMlToday: 0, autoDoseDailyMaxMl: 5000,
-  systemEnabled: true,  // Mode Aksi: true=ON, false=OFF (blokir jadwal+irigasi manual)
+  systemEnabled: true,  // Mode Aksi controller: true=ON, false=OFF (blokir jadwal+irigasi manual)
+  doserSystemEnabled: true,  // Mode Aksi SmartDosing: true=ON, false=OFF (blokir dosing)
 };
 
 // Dua sistem kembar. GH tanpa recharge sumur bor; OF2 dengan recharge.
@@ -644,6 +645,19 @@ export default function KebunJayaDashboard() {
   const restartDevice = () => {
     cmd("restart", {});
     notify("Restart dikirim — ESP32 akan reboot...");
+  };
+
+  // Mode Aksi SmartDosing: toggle dosing system ON/OFF
+  const toggleDoserSystem = () => {
+    const newState = !S.doserSystemEnabled;
+    cmd("system_power", { enable: newState }, (p) => ({ ...p, doserSystemEnabled: newState }));
+    notify(newState ? "SmartDosing AKTIF — dosing boleh berjalan." : "SmartDosing NONAKTIF — dosing dijeda.");
+  };
+
+  // Restart SmartDosing
+  const restartDoser = () => {
+    cmd("restart", {});
+    notify("Restart SmartDosing dikirim — ESP32 akan reboot...");
   };
 
   const sendDose = () => {
@@ -1380,17 +1394,49 @@ export default function KebunJayaDashboard() {
                 name={sys === "of2" ? "OF2 — Irrigation + Recharge" : "GH — Irrigation"}
                 detail={sys === "of2" ? "ESP32 · HTTP poll + UDP lokal" : "ESP32 · HTTP poll"}
                 state={S.ctrlOnline ? "ok" : "fault"} text={S.ctrlOnline ? "ONLINE" : "OFFLINE"} />
-              <StatusRow name={`Smart Dosing ${sys.toUpperCase()}`} detail="ESP32 · HTTP poll"
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Smart Dosing {sys.toUpperCase()}</div>
+                  <div className="note mono" style={{ fontSize: 10 }}>ESP32 · HTTP poll</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className={`sdot ${S.doserSystemEnabled !== false ? "ok" : "warn"}`} />
+                  <span className="mono" style={{ fontSize: 10, color: "var(--dim)" }}>DOSE</span>
+                  <button
+                    className={`tgl sm ${S.doserSystemEnabled !== false ? "on" : ""}`}
+                    onClick={toggleDoserSystem}
+                    disabled={!S.doserOnline}
+                    aria-label={S.doserSystemEnabled !== false ? "Matikan dosing" : "Nyalakan dosing"}
+                  />
+                </div>
+              </div>
+              <StatusRow
+                name={`Smart Dosing ${sys.toUpperCase()}`}
+                detail="ESP32 · HTTP poll"
                 state={S.doserOnline ? "ok" : "fault"} text={S.doserOnline ? "ONLINE" : "OFFLINE"} />
-              <div className="rowitem" style={{ borderBottom: "none" }}>
+              <div className="rowitem">
                 <div className="flex1">
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--amber)" }}>Restart Controller</div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>Restart Controller</div>
                   <div className="note" style={{ fontSize: 10 }}>Reboot ESP32 — WiFi reconnect otomatis</div>
                 </div>
                 <button
                   className="btn"
                   onClick={restartDevice}
                   disabled={ctrlOff}
+                  style={{ background: "var(--run)", padding: "8px 16px", fontSize: 12 }}
+                >
+                  RESTART
+                </button>
+              </div>
+              <div className="rowitem" style={{ borderBottom: "none" }}>
+                <div className="flex1">
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>Restart Smart Dosing</div>
+                  <div className="note" style={{ fontSize: 10 }}>Reboot ESP32 dosing</div>
+                </div>
+                <button
+                  className="btn"
+                  onClick={restartDoser}
+                  disabled={!S.doserOnline}
                   style={{ background: "var(--run)", padding: "8px 16px", fontSize: 12 }}
                 >
                   RESTART
