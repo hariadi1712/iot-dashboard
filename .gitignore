@@ -3,9 +3,6 @@ api/config.php
 api/setup.php
 Token.txt
 
-# Node (if any)
-node_modules/
-
 # OS
 .DS_Store
 Thumbs.db
