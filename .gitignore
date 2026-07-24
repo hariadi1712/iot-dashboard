@@ -1,10 +1,7 @@
-# Sensitive credentials — KEEP config.php template, tapi JANGAN push credentials nyata
-# config.php di-commit dengan placeholder CHANGE_ME — edit manual setelah deploy
+# Sensitive credentials — NEVER commit
+api/config.php
 api/setup.php
 Token.txt
-
-# Uploaded firmware binaries (per device, dari Arduino IDE)
-ota/
 
 # Node (if any)
 node_modules/
