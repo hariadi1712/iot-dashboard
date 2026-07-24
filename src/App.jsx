@@ -1338,94 +1338,6 @@ export default function KebunJayaDashboard() {
           </div>
         )}
 
-        {/* ==================== MODE AKSI ==================== */}
-        {tab === "mode" && (
-          <div>
-            <section className="panel" style={{ marginBottom: 12, borderColor: S.systemEnabled ? "var(--water)" : "var(--amber)" }}>
-              <div className="ptitle">
-                <h2 className="mono">MODE AKSI IRIGASI</h2>
-                <span className={`mono`} style={{ color: S.systemEnabled ? "var(--run)" : "var(--amber)", fontWeight: 700, fontSize: 12 }}>
-                  {S.systemEnabled ? "● AKTIF" : "○ NONAKTIF"}
-                </span>
-              </div>
-              <p className="note" style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
-                {S.systemEnabled
-                  ? "Irigasi aktif — jadwal dan irigasi manual berjalan normal."
-                  : "Irigasi dijeda — semua jadwal tidak fire dan irigasi manual diblokir. Monitoring tetap berjalan."}
-              </p>
-              <div className="rowitem" style={{ paddingTop: 0 }}>
-                <div className="flex1">
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Sistem Irrigation</div>
-                  <div className="note">
-                    {S.systemEnabled
-                      ? "Jadwal + irigasi manual boleh berjalan."
-                      : "Jadwal + irigasi manual diblokir."}
-                  </div>
-                </div>
-                <button
-                  className={`tgl ${S.systemEnabled ? "on" : ""}`}
-                  onClick={toggleSystem}
-                  disabled={S.estop}
-                  aria-label={S.systemEnabled ? "Matikan sistem" : "Nyalakan sistem"}
-                  style={{ minWidth: 56 }}
-                />
-              </div>
-            </section>
-
-            <section className="panel" style={{ marginBottom: 12, borderColor: "var(--line)" }}>
-              <div className="ptitle">
-                <h2 className="mono">RESTART CONTROLLER</h2>
-              </div>
-              <p className="note" style={{ margin: "0 0 16px", lineHeight: 1.7 }}>
-                Reboot ESP32. WiFi akan reconnect otomatis, jadwal & state tersimpan di NVS.
-                Controller akan online kembali dalam ~10-30 detik.
-              </p>
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="raisebox" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{SYS_LABEL[sys]}</div>
-                    <div className="note mono" style={{ fontSize: 10 }}>
-                      {ctrlOff ? "OFFLINE" : "Online"} · heap {ctrlOff ? "—" : `${S.heapKb} KB`}
-                    </div>
-                  </div>
-                  <button
-                    className="btn"
-                    onClick={restartDevice}
-                    disabled={ctrlOff}
-                    style={{ background: "var(--run)", minWidth: 120 }}
-                  >
-                    RESTART
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="panel">
-              <div className="ptitle">
-                <h2 className="mono">STATUS SISTEM</h2>
-              </div>
-              <div className="grid2" style={{ marginBottom: 12 }}>
-                <div style={{ background: "var(--raise)", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                  <div className="mono" style={{ fontSize: 12, color: S.systemEnabled ? "var(--run)" : "var(--amber)", fontWeight: 700 }}>
-                    {S.systemEnabled ? "ON" : "OFF"}
-                  </div>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--dim)", marginTop: 3 }}>MODE AKSI</div>
-                </div>
-                <div style={{ background: "var(--raise)", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                  <div className="mono" style={{ fontSize: 12, color: ctrlOff ? "var(--danger)" : "var(--run)", fontWeight: 700 }}>
-                    {ctrlOff ? "OFFLINE" : "ONLINE"}
-                  </div>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--dim)", marginTop: 3 }}>CONTROLLER</div>
-                </div>
-              </div>
-              <div className="note">
-                <span style={{ color: "var(--amber)" }}>⚠</span> Mode Aksi OFF ≠ E-Stop. E-Stop menghentikan semua pompa langsung.
-                Mode Aksi hanya menjeda jadwal dan irigasi manual, tapi monitoring tetap jalan.
-              </div>
-            </section>
-          </div>
-        )}
-
         {/* ==================== STATUS ==================== */}
         {tab === "status" && (
           <div>
@@ -1448,12 +1360,42 @@ export default function KebunJayaDashboard() {
 
             <section className="panel" style={{ marginBottom: 12 }}>
               <div className="ptitle"><h2 className="mono">DEVICE SISTEM {SYS_LABEL[sys].toUpperCase()}</h2></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{sys === "of2" ? "OF2 — Irrigation + Recharge" : "GH — Irrigation"}</div>
+                  <div className="note mono" style={{ fontSize: 10 }}>{sys === "of2" ? "ESP32 · HTTP poll + UDP lokal" : "ESP32 · HTTP poll"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className={`sdot ${S.systemEnabled ? "ok" : "warn"}`} />
+                  <span className="mono" style={{ fontSize: 10, color: "var(--dim)" }}>IRRIG</span>
+                  <button
+                    className={`tgl sm ${S.systemEnabled ? "on" : ""}`}
+                    onClick={toggleSystem}
+                    disabled={S.estop}
+                    aria-label={S.systemEnabled ? "Matikan sistem" : "Nyalakan sistem"}
+                  />
+                </div>
+              </div>
               <StatusRow
                 name={sys === "of2" ? "OF2 — Irrigation + Recharge" : "GH — Irrigation"}
                 detail={sys === "of2" ? "ESP32 · HTTP poll + UDP lokal" : "ESP32 · HTTP poll"}
                 state={S.ctrlOnline ? "ok" : "fault"} text={S.ctrlOnline ? "ONLINE" : "OFFLINE"} />
               <StatusRow name={`Smart Dosing ${sys.toUpperCase()}`} detail="ESP32 · HTTP poll"
                 state={S.doserOnline ? "ok" : "fault"} text={S.doserOnline ? "ONLINE" : "OFFLINE"} />
+              <div className="rowitem" style={{ borderBottom: "none" }}>
+                <div className="flex1">
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--amber)" }}>Restart Controller</div>
+                  <div className="note" style={{ fontSize: 10 }}>Reboot ESP32 — WiFi reconnect otomatis</div>
+                </div>
+                <button
+                  className="btn"
+                  onClick={restartDevice}
+                  disabled={ctrlOff}
+                  style={{ background: "var(--run)", padding: "8px 16px", fontSize: 12 }}
+                >
+                  RESTART
+                </button>
+              </div>
             </section>
 
             <section className="panel" style={{ marginBottom: 12 }}>
@@ -1515,9 +1457,9 @@ export default function KebunJayaDashboard() {
       <div className={`toast ${toast ? "show" : ""}`} role="status">{toast}</div>
 
       <nav>
-        {["monitor", "kontrol", "dosing", "mode", "status"].map((t) => (
+        {["monitor", "kontrol", "dosing", "status"].map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {t === "mode" ? "Mode Aksi" : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </nav>
