@@ -24,10 +24,8 @@
   .badge{margin-left:auto;font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;padding:5px 10px;border-radius:7px;border:1px solid var(--owner);color:var(--owner)}
   .hamburger{padding:8px;background:transparent;border:none;cursor:pointer;color:var(--dim);display:flex;flex-direction:column;gap:4px}
   .hamburger span{display:block;width:22px;height:2px;background:var(--dim);border-radius:2px;transition:all .2s}
-  .hamburger.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}
-  .hamburger.open span:nth-child(2){opacity:0}
-  .hamburger.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
-  .menu-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:40}
+  .menu-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:40;display:none}
+  .menu-overlay.open{display:block}
   .menu-panel{position:fixed;top:0;right:0;bottom:0;width:280px;background:var(--panel);border-left:1px solid var(--line);z-index:50;transform:translateX(100%);transition:transform .3s}
   .menu-panel.open{transform:translateX(0)}
   .menu-header{padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
@@ -35,8 +33,8 @@
   .menu-section{margin:8px 0}
   .menu-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--dim);padding:8px 16px 4px}
   .menu-item{display:flex;align-items:center;gap:12px;padding:12px 16px;color:var(--text);cursor:pointer;font-size:14px}
-  .menu-item:hover{background:var(--raise)}
-  .menu-item.active{background:var(--raise);color:var(--water)}
+  .menu-item:hover,.menu-item.active{background:var(--raise)}
+  .menu-item.active{color:var(--water)}
   .menu-item svg{width:20px;height:20px;flex-shrink:0;color:var(--dim)}
   .menu-item.active svg{color:var(--water)}
   .menu-divider{height:1px;background:var(--line);margin:8px 0}
@@ -77,26 +75,25 @@
 <script>
 const API = "/api";
 const $ = (id) => document.getElementById(id);
-let toastT;
-function toast(m){ let t=$("toast"); if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t);} t.textContent=m; clearTimeout(toastT); toastT=setTimeout(()=>t.remove(),3200); }
-let menuOpen=false, currentPage="fleet", fleetData=[], usersData=[], configData={};
+let toastT, menuOpen=false, currentPage="fleet", fleetData=[], usersData=[], configData={};
 
 function toggleMenu(){
   menuOpen=!menuOpen;
-  $("hamburger").classList.toggle("open",menuOpen);
-  $("menuOverlay").style.display=menuOpen?"block":"none";
-  $("menuPanel").style.transform=menuOpen?"translateX(0)":"translateX(100%)";
+  document.getElementById("hamburger").classList.toggle("open",menuOpen);
+  document.getElementById("menuOverlay").classList.toggle("open",menuOpen);
+  document.getElementById("menuPanel").classList.toggle("open",menuOpen);
 }
 
 function showPage(p){
   currentPage=p;
-  document.querySelectorAll(".page").forEach(el=>el.style.display="none");
-  $("page-"+p).style.display="block";
+  document.querySelectorAll(".page").forEach(el=>el.classList.remove("active"));
+  document.getElementById("page-"+p).classList.add("active");
   document.querySelectorAll(".menu-item").forEach(el=>el.classList.remove("active"));
-  $("menu-"+p).classList.add("active");
+  document.getElementById("menu-"+p).classList.add("active");
   toggleMenu();
   window.scrollTo(0,0);
 }
+function toast(m){ let t=$("toast"); if(!t){t=document.createElement("div");t.id="toast";t.className="toast";document.body.appendChild(t);} t.textContent=m; clearTimeout(toastT); toastT=setTimeout(()=>t.remove(),3200); }
 async function api(path, opts){
   opts = opts || {};
   opts.credentials = "include";
@@ -135,9 +132,11 @@ async function doLogin(){
 
 async function boot(){
   try{
-    [fleetData, usersData, configData] = await Promise.all([api("/admin/fleet"), api("/admin/users"), api("/admin/config")]);
-    renderApp();
-    loadDevCfg();
+    const [fleet, users, config] = await Promise.all([
+      api("/admin/fleet"), api("/admin/users"), api("/admin/config")
+    ]);
+    render(fleet, users, config);
+    if($("cfgDev")) loadDevCfg();
     loadOtaList();
   }catch(e){
     if(String(e.message).includes("403")||String(e.message).toLowerCase().includes("owner")){ toast("Khusus owner."); loginView(); }
@@ -148,65 +147,58 @@ async function boot(){
 
 function agoTxt(s){ if(s==null)return "belum pernah"; if(s<60)return s+" dtk lalu"; if(s<3600)return Math.floor(s/60)+" mnt lalu"; return Math.floor(s/3600)+" jam lalu"; }
 
-function agoTxt(s){ if(s==null)return "belum pernah"; if(s<60)return s+" dtk lalu"; if(s<3600)return Math.floor(s/60)+" mnt lalu"; return Math.floor(s/3600)+" jam lalu"; }
-
 function renderApp(){
   const f = fleetData.fleet, us = usersData.users, c = configData.config;
-  $("app").innerHTML = `
+  document.getElementById("app").innerHTML = `
     <header>
       <img src="/assets/logo.png" alt="P² LABS">
       <div><div class="htitle">P² LABS · Admin</div><div class="hsub mono">iot.petanipizza.xyz</div></div>
       <span class="badge">OWNER</span>
-      <button class="hamburger" id="hamburger" onclick="toggleMenu()">
-        <span></span><span></span><span></span>
-      </button>
+      <button class="hamburger" id="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
     </header>
-
-    <div style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:40" id="menuOverlay" onclick="toggleMenu()"></div>
-    <div id="menuPanel" style="position:fixed;top:0;right:0;bottom:0;width:280px;background:var(--panel);border-left:1px solid var(--line);z-index:50;transform:translateX(100%);transition:transform .3s">
-      <div style="padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+    <div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+    <div class="menu-panel" id="menuPanel">
+      <div class="menu-header">
         <img src="/assets/logo.png" alt="P² LABS" style="height:28px">
-        <span style="font-weight:700;font-size:15px;flex:1">Menu</span>
+        <span class="menu-title">Menu</span>
         <button onclick="toggleMenu()" style="background:transparent;border:none;color:var(--dim);font-size:20px;cursor:pointer">×</button>
       </div>
-      <div style="margin:8px 0">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--dim);padding:8px 16px 4px">ADMINISTRASI</div>
+      <div class="menu-section">
+        <div class="menu-section-title">ADMINISTRASI</div>
         <div class="menu-item active" id="menu-fleet" onclick="showPage('fleet')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
           Armada Device
         </div>
         <div class="menu-item" id="menu-users" onclick="showPage('users')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
           Manajemen User
         </div>
         <div class="menu-item" id="menu-config" onclick="showPage('config')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><circle cx="12" cy="12" r="3"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
           Konfigurasi Sistem
         </div>
       </div>
-      <div style="margin:8px 0">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--dim);padding:8px 16px 4px">DEVICE</div>
+      <div class="menu-section">
+        <div class="menu-section-title">DEVICE</div>
         <div class="menu-item" id="menu-calib" onclick="showPage('calib')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
           Kalibrasi Device
         </div>
         <div class="menu-item" id="menu-ota" onclick="showPage('ota')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           OTA Firmware
         </div>
       </div>
-      <div style="height:1px;background:var(--line);margin:8px 0"></div>
-      <div style="margin:8px 0">
+      <div class="menu-divider"></div>
+      <div class="menu-section">
         <div class="menu-item" onclick="doLogout()" style="color:var(--danger)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
           Keluar
         </div>
       </div>
     </div>
-
     <div class="wrap">
-      <!-- FLEET PAGE -->
-      <div id="page-fleet" style="display:block">
+      <div class="page active" id="page-fleet">
         <h2>ARMADA DEVICE</h2>
         <div class="panel">
           ${f.map(d=>`<div class="row">
@@ -220,9 +212,7 @@ function renderApp(){
           <div class="note" style="margin-top:10px">Ambang offline: ${fleetData.offline_after_s} detik tanpa telemetry.</div>
         </div>
       </div>
-
-      <!-- USERS PAGE -->
-      <div id="page-users" style="display:none">
+      <div class="page" id="page-users">
         <h2>MANAJEMEN USER</h2>
         <div class="panel">
           ${us.map(u=>`<div class="row">
@@ -245,32 +235,20 @@ function renderApp(){
           </div>
         </div>
       </div>
-
-      <!-- CONFIG PAGE -->
-      <div id="page-config" style="display:none">
+      <div class="page" id="page-config">
         <h2>KONFIGURASI SISTEM</h2>
         <div class="panel">
           <div class="grid">
-            <div>
-              <label>Retensi telemetry mentah (hari)</label>
-              <input id="cfg_ret" type="number" min="1" value="${c.telemetry_retention_days}">
-              <div class="note" style="margin-top:4px">Data telemetry lebih tua dihapus otomatis.</div>
-            </div>
-            <div>
-              <label>Ambang device offline (detik)</label>
-              <input id="cfg_off" type="number" min="5" value="${c.device_offline_after_s}">
-              <div class="note" style="margin-top:4px">Device dianggap offline jika tak kirim telemetry.</div>
-            </div>
+            <div><label>Retensi telemetry mentah (hari)</label><input id="cfg_ret" type="number" min="1" value="${c.telemetry_retention_days}"><div class="note" style="margin-top:4px">Data telemetry lebih tua dihapus otomatis.</div></div>
+            <div><label>Ambang device offline (detik)</label><input id="cfg_off" type="number" min="5" value="${c.device_offline_after_s}"><div class="note" style="margin-top:4px">Device dianggap offline jika tak kirim telemetry.</div></div>
             <button class="btn" onclick="saveCfg()">Simpan Konfigurasi</button>
           </div>
         </div>
       </div>
-
-      <!-- CALIBRATION PAGE -->
-      <div id="page-calib" style="display:none">
+      <div class="page" id="page-calib">
         <h2>KALIBRASI &amp; PARAMETER DEVICE</h2>
         <div class="panel">
-          <div class="note" style="margin-bottom:12px">Parameter ini dikirim ke device saat sync (~60 dtk).</div>
+          <div class="note" style="margin-bottom:12px">Parameter ini dikirim ke device saat sync (~60 dtk) dan disimpan di device.</div>
           <label>Pilih device</label>
           <select id="cfgDev" onchange="loadDevCfg()">
             ${f.filter(d=>d.role==='controller'||d.role==='doser').map(d=>`<option value="${d.id}" data-role="${d.role}">${d.name} (${d.id})</option>`).join("")}
@@ -278,21 +256,21 @@ function renderApp(){
           <div id="cfgForm" style="margin-top:14px">
             <div class="grid">
               <div id="controllerFields">
-                <div><label>Kalibrasi pressure (pScale)</label><input id="c_pScale" type="number" step="0.1"></div>
-                <div><label>Offset pressure (pOffset)</label><input id="c_pOffset" type="number" step="0.1"></div>
-                <div><label>Total titik irigasi</label><input id="c_points" type="number" min="1"></div>
-                <div><label>Kalibrasi flow air baku (pulsa/L)</label><input id="c_rawPPL" type="number" step="1"></div>
+                <div><label>Kalibrasi pressure (pScale)</label><input id="c_pScale" type="number" step="0.1" placeholder="mis. 55"><div class="note" style="margin-top:4px">Skala ADC→PSI. Range 1–500.</div></div>
+                <div><label>Offset pressure (pOffset)</label><input id="c_pOffset" type="number" step="0.1" placeholder="mis. 0"><div class="note" style="margin-top:4px">Geser pembacaan. Range ±50.</div></div>
+                <div><label>Total titik irigasi</label><input id="c_points" type="number" min="1" placeholder="mis. 1"><div class="note" style="margin-top:4px">Jumlah titik/emitter. Range 1–200000.</div></div>
+                <div><label>Kalibrasi flow air baku (pulsa/L)</label><input id="c_rawPPL" type="number" step="1" placeholder="mis. 450"><div class="note" style="margin-top:4px">YF-S201 ≈ 450 pulsa/liter. Range 10–5000.</div></div>
                 <div style="display:flex;gap:10px">
-                  <div style="flex:1"><label>Pressure min (psi)</label><input id="c_pMin" type="number" step="0.1"></div>
-                  <div style="flex:1"><label>Pressure max (psi)</label><input id="c_pMax" type="number" step="0.1"></div>
+                  <div style="flex:1"><label>Pressure min (psi)</label><input id="c_pMin" type="number" step="0.1" placeholder="mis. 5"></div>
+                  <div style="flex:1"><label>Pressure max (psi)</label><input id="c_pMax" type="number" step="0.1" placeholder="mis. 16"></div>
                 </div>
               </div>
               <div id="doserGuards" style="display:none;border-top:1px solid var(--line);padding-top:12px;margin-top:6px">
                 <div style="font-weight:600;margin-bottom:8px">Guard dosing (Smartdosing)</div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
-                  <div style="flex:1;min-width:120px"><label>Dry-run timeout (dtk)</label><input id="c_dryrun" type="number" step="1"></div>
-                  <div style="flex:1;min-width:120px"><label>Stall timeout (dtk)</label><input id="c_stall" type="number" step="1"></div>
-                  <div style="flex:1;min-width:120px"><label>Durasi maks (dtk)</label><input id="c_dosemax" type="number" step="1"></div>
+                  <div style="flex:1;min-width:120px"><label>Dry-run timeout (dtk)</label><input id="c_dryrun" type="number" step="1" placeholder="10"><div class="note" style="margin-top:4px">Nol pulsa → alarm. Range 2–60.</div></div>
+                  <div style="flex:1;min-width:120px"><label>Stall timeout (dtk)</label><input id="c_stall" type="number" step="1" placeholder="8"><div class="note" style="margin-top:4px">Aliran mandek → alarm. Range 2–60.</div></div>
+                  <div style="flex:1;min-width:120px"><label>Durasi maks (dtk)</label><input id="c_dosemax" type="number" step="1" placeholder="120"><div class="note" style="margin-top:4px">Batas absolut 1 sesi. Range 10–600.</div></div>
                 </div>
               </div>
               <button class="btn" onclick="saveDevCfg()">Simpan ke Device</button>
@@ -301,9 +279,7 @@ function renderApp(){
           </div>
         </div>
       </div>
-
-      <!-- OTA PAGE -->
-      <div id="page-ota" style="display:none">
+      <div class="page" id="page-ota">
         <h2>OTA FIRMWARE</h2>
         <div class="panel" id="otaPanel">
           <div class="name" style="margin-bottom:10px">Upload &amp; kelola firmware</div>
@@ -319,194 +295,14 @@ function renderApp(){
               </div>
               <div style="flex:1;min-width:100px"><label>Version</label><input id="otaVersion" type="text" placeholder="mis. 1.2.0" style="margin-top:6px"></div>
             </div>
-            <div><label>Catatan (opsional)</label><input id="otaNotes" type="text" placeholder="mis. Fix dry-run guard" style="margin-top:4px"></div>
+            <div><label>Catatan (opsional)</label><input id="otaNotes" type="text" placeholder="mis. Fix bug" style="margin-top:4px"></div>
             <div class="note">Maks 2 MB. Hanya .bin. ESP32 4MB+ flash.</div>
             <button class="btn" style="margin-top:10px" onclick="uploadFirmware()" id="otaUploadBtn">Upload Firmware</button>
           </div>
           <div id="otaList"></div>
         </div>
       </div>
-
-      <div style="text-align:center;margin-top:20px">
-        <a class="back" href="/">← Dashboard operator</a>
-      </div>
-    </div>`;
-  loadDevCfg();
-  loadOtaList();
-}
-    <div class="wrap">
-      <h2 id="fleet">ARMADA DEVICE</h2>
-      <div class="panel">
-        ${f.map(d=>`
-          <div class="row">
-            <span class="dot" style="background:${d.online?'var(--run)':'var(--danger)'}"></span>
-            <div class="flex1">
-              <div class="name">${d.name}</div>
-              <div class="sub mono">${d.id} · ${d.system.toUpperCase()} · ${agoTxt(d.ago_s)}</div>
-            </div>
-            <span class="pill ${d.online?'on':'off'}">${d.online?'ONLINE':'OFFLINE'}</span>
-          </div>`).join("")}
-        <div class="note" style="margin-top:10px">Ambang offline: ${fleet.offline_after_s} detik tanpa telemetry.</div>
-      </div>
-
-      <h2 id="users">MANAJEMEN USER</h2>
-      <div class="panel">
-        ${us.map(u=>`
-          <div class="row">
-            <div class="flex1">
-              <div class="name">${u.username}</div>
-              <div class="sub mono">dibuat ${new Date(u.created_at).toLocaleDateString('id-ID')}</div>
-            </div>
-            <span class="pill ${u.role==='owner'?'owner':''}">${u.role.toUpperCase()}</span>
-            <button class="btn-ghost btn-sm" onclick="pwPrompt(${u.id},'${u.username}')">Password</button>
-            <button class="btn-danger btn-sm" onclick="delUser(${u.id},'${u.username}')">Hapus</button>
-          </div>`).join("")}
-      </div>
-      <div class="panel">
-        <div class="name" style="margin-bottom:10px">Tambah user baru</div>
-        <div class="grid">
-          <div><label>Username</label><input id="nu"></div>
-          <div><label>Password (min 8)</label><input id="np" type="text"></div>
-          <div><label>Role</label>
-            <select id="nr"><option value="operator">Operator</option><option value="owner">Owner</option></select>
-          </div>
-          <button class="btn" onclick="addUser()">Tambah User</button>
-        </div>
-      </div>
-
-      <h2 id="config">KONFIGURASI SISTEM</h2>
-      <div class="panel">
-        <div class="grid">
-          <div>
-            <label>Retensi telemetry mentah (hari)</label>
-            <input id="cfg_ret" type="number" min="1" value="${c.telemetry_retention_days}">
-            <div class="note" style="margin-top:4px">Data telemetry lebih tua dihapus otomatis. History harian tetap permanen.</div>
-          </div>
-          <div>
-            <label>Ambang device offline (detik)</label>
-            <input id="cfg_off" type="number" min="5" value="${c.device_offline_after_s}">
-            <div class="note" style="margin-top:4px">Device dianggap offline jika tak kirim telemetry selama ini.</div>
-          </div>
-          <button class="btn" onclick="saveCfg()">Simpan Konfigurasi</button>
-        </div>
-      </div>
-
-      <h2 id="calibration">KALIBRASI &amp; PARAMETER DEVICE</h2>
-      <div class="panel">
-        <div class="note" style="margin-bottom:12px">
-          Parameter ini dikirim ke device saat sync (~60 dtk) dan disimpan di device.
-          Semua divalidasi ke rentang aman. Ubah hanya jika paham dampaknya.
-        </div>
-        <label>Pilih device</label>
-        <select id="cfgDev" onchange="loadDevCfg()">
-          ${f.filter(d=>d.role==='controller'||d.role==='doser').map(d=>`<option value="${d.id}" data-role="${d.role}">${d.name} (${d.id})</option>`).join("")}
-        </select>
-        <div id="cfgForm" style="margin-top:14px">
-          <div class="grid">
-            <div id="controllerFields">
-            <div>
-              <label>Kalibrasi pressure (pScale)</label>
-              <input id="c_pScale" type="number" step="0.1" placeholder="mis. 55">
-              <div class="note" style="margin-top:4px">Skala ADC→PSI. Naikkan jika pembacaan terlalu kecil. Range 1–500.</div>
-            </div>
-            <div>
-              <label>Offset pressure (pOffset)</label>
-              <input id="c_pOffset" type="number" step="0.1" placeholder="mis. 0">
-              <div class="note" style="margin-top:4px">Geser pembacaan naik/turun (psi). Mis. jika idle harusnya 0 tapi baca 0.3, isi -0.3. Range ±50.</div>
-            </div>
-            <div>
-              <label>Total titik irigasi</label>
-              <input id="c_points" type="number" min="1" placeholder="mis. 1">
-              <div class="note" style="margin-top:4px">Jumlah titik/emitter. Untuk hitung liter per titik. Range 1–200000.</div>
-            </div>
-            <div>
-              <label>Kalibrasi flow air baku (pulsa/L)</label>
-              <input id="c_rawPPL" type="number" step="1" placeholder="mis. 450">
-              <div class="note" style="margin-top:4px">YF-S201 ≈ 450 pulsa/liter. Untuk auto-dose. Kalibrasi jika volume air baku meleset. Range 10–5000.</div>
-            </div>
-            <div style="display:flex;gap:10px">
-              <div style="flex:1">
-                <label>Pressure min (psi)</label>
-                <input id="c_pMin" type="number" step="0.1" placeholder="mis. 5">
-              </div>
-              <div style="flex:1">
-                <label>Pressure max (psi)</label>
-                <input id="c_pMax" type="number" step="0.1" placeholder="mis. 16">
-              </div>
-            </div>
-            <div class="note">Batas bawah/atas gauge &amp; alarm tekanan. Max harus &gt; min.</div>
-            </div>
-
-            <div id="doserGuards" style="display:none;border-top:1px solid var(--line);padding-top:12px;margin-top:6px">
-              <div style="font-weight:600;margin-bottom:8px">Guard dosing (Smartdosing)</div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <div style="flex:1;min-width:120px">
-                  <label>Dry-run timeout (dtk)</label>
-                  <input id="c_dryrun" type="number" step="1" placeholder="10">
-                  <div class="note" style="margin-top:4px">Nol aliran → alarm. 2–60 dtk.</div>
-                </div>
-                <div style="flex:1;min-width:120px">
-                  <label>Stall timeout (dtk)</label>
-                  <input id="c_stall" type="number" step="1" placeholder="8">
-                  <div class="note" style="margin-top:4px">Aliran mandek di tengah → alarm. 2–60 dtk.</div>
-                </div>
-                <div style="flex:1;min-width:120px">
-                  <label>Durasi maks (dtk)</label>
-                  <input id="c_dosemax" type="number" step="1" placeholder="120">
-                  <div class="note" style="margin-top:4px">Batas absolut 1 sesi. 10–600 dtk.</div>
-                </div>
-              </div>
-            </div>
-
-            <button class="btn" onclick="saveDevCfg()">Simpan ke Device</button>
-            <div class="note" id="cfgVer"></div>
-          </div>
-        </div>
-      </div>
-
-      <h2 id="ota">OTA FIRMWARE</h2>
-      <div class="panel" id="otaPanel">
-        <div class="name" style="margin-bottom:10px">Upload &amp; kelola firmware</div>
-
-        <!-- Upload form -->
-        <div class="grid" style="margin-bottom:16px">
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div style="flex:1;min-width:140px">
-              <label>File .bin</label>
-              <input type="file" id="otaFile" accept=".bin" style="background:var(--raise);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 10px;width:100%">
-            </div>
-            <div style="flex:1;min-width:100px">
-              <label>Target device</label>
-              <select id="otaDevice" style="margin-top:6px">
-                <option value="gh">GH Controller</option>
-                <option value="of2">OF2 Controller</option>
-                <option value="doser_gh">SmartDosing GH</option>
-                <option value="doser_of2">SmartDosing OF2</option>
-                <option value="_all">Semua device</option>
-              </select>
-            </div>
-            <div style="flex:1;min-width:100px">
-              <label>Version</label>
-              <input id="otaVersion" type="text" placeholder="mis. 1.2.0" style="margin-top:6px">
-            </div>
-          </div>
-          <div style="margin-top:6px">
-            <label>Catatan (opsional)</label>
-            <input id="otaNotes" type="text" placeholder="mis. Fix dry-run guard" style="margin-top:4px">
-          </div>
-          <div class="note" style="margin-top:4px">Maks 2 MB. Hanya .bin. ESP32 4MB+ flash. Compile di Arduino IDE.</div>
-          <button class="btn" style="margin-top:10px" onclick="uploadFirmware()" id="otaUploadBtn">Upload Firmware</button>
-        </div>
-
-        <!-- Firmware list -->
-        <div id="otaList"></div>
-      </div>
-
-      <div style="text-align:center;margin-top:20px">
-        <a class="back" href="/">← Dashboard operator</a>
-        &nbsp;·&nbsp;
-        <a class="back" href="#" onclick="doLogout();return false;">Keluar</a>
-      </div>
+      <div style="text-align:center;margin-top:20px"><a class="back" href="/">← Dashboard operator</a></div>
     </div>`;
 }
 
